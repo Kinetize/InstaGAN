@@ -1,6 +1,2 @@
-output
-code/*.pyc
-code/miscc/*.pyc
-backup
-.DS_Store
-.idea/
+/data
+/MNIST_cDCGAN_results
