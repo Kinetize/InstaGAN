@@ -1,61 +1,89 @@
-# 05/03/2019 Repo is now archived. 
+# Instagram Crawler [![Build Status](https://travis-ci.org/huaying/instagram-crawler.svg?branch=master)](https://travis-ci.org/huaying/instagram-crawler)
 
-I am now officially archiving this repo after a long time of, well, not maintaining.
+Below is what you can do with this program:
+- Get Instagram posts/profile/hashtag data without using Instagram API. `crawler.py`
+- Like posts automatically. `liker.py`
 
----
-# InstagramCrawler
-A non API python program to crawl public photos, posts, followers, and following
+This crawler could fail due to updates on instagram’s website. If you encounter any problems, please contact me.
 
-##### Login to crawl followers/following
-To crawl followers or followings, you will need to login with your credentials either by filling in 'auth.json' or typing in(as you would do when you are simply browsing instagram)
+## Install
+1. Make sure you have Chrome browser installed.
+2. Download [chromedriver](https://sites.google.com/a/chromium.org/chromedriver/) and put it into bin folder: `./inscrawler/bin/chromedriver`
+3. Install Selenium: `pip install -r requirements.txt`
+4. `cp inscrawler/secret.py.dist inscrawler/secret.py`
 
-Well, it is to copy 'auth.json.example' to 'auth.json' and fill in your username and password
-
-##### PhantomJS for headless browser
-For headless browser, after installing [phantomjs](http://phantomjs.org/), add '-l' to the arguments
-
-### Examples:
-Download the first 100 photos and captions(user's posts, if any) from username "instagram"
-
-###### NOTE: When I ran on public account 'instagram', somehow it stops at caption 29
+## Crawler
+### Usage
 ```
-$ python instagramcrawler.py -q 'instagram' -c -n 100
-```
-Search for the hashtag "#breakfast" and download first 50 photos
-```
-$ python instagramcrawler.py -q '#breakfast' -n 50
-```
-Record the first 30 followers of the username "instagram", requires log in
-```
-$ python instagramcrawler.py -q 'instagram' -t 'followers' -n 30 -a auth.json
-```
+positional arguments:
+  mode
+    options: [posts, posts_full, profile, hashtag]
 
-### Full usage:
-```
-usage: instagramcrawler.py [-h] [-d DIR] [-q QUERY] [-t CRAWL_TYPE] [-n NUMBER] [-c]  [-a AUTHENTICATION]
-```
-  - [-d DIR]: the directory to save crawling results, default is './data/[query]'
-  - [-q QUERY] : username, add '#' to search for hashtags, e.g. 'username', '#hashtag'
-  - [-t CRAWL_TYPE]: crawl_type, Options: 'photos | followers | following'
-  - [-n NUMBER]: number of posts, followers, or following to crawl
-  - [-c]: add this flag to download captions(what user wrote to describe their photos)
-  - [-a AUTHENTICATION]: path to a json file, which contains your instagram credentials, please see 'auth.json'
-  - [-l HEADLESS]: If set, will use PhantomJS driver to run script as headless
-  - [-f FIREFOX_PATH]: path to the **binary** (not the script) of firefox on your system (see this issue in Selenium https://github.com/SeleniumHQ/selenium/issues/3884#issuecomment-296988595)
+optional arguments:
+  -n NUMBER, --number NUMBER
+                        number of returned posts
+  -u USERNAME, --username USERNAME
+                        instagram's username
+  -t TAG, --tag TAG     instagram's tag name
+  -o OUTPUT, --output OUTPUT
+                        output file name(json format)
 
+  --debug               see how the program automates the browser
 
-### Installation
-There are 2 packages : selenium & requests
+  --fetch_comments      fetch comments
+  # Turning on the flag might take forever to fetch data if there are too many commnets.
 
-###### NOTE: I used selenium = 3.4, geckodriver = 0.16 (fixed bug in previous versions)
-```
-$ pip install -r requirements.txt
+  --fetch_likes_plays   fetch like/play number
+
+  --fetch_likers        fetch all likers
+  # Instagram might have rate limit for fetching likers. Turning on the flag might take forever to fetch data if there are too many likes.
+
+  --fetch_mentions      fetch users who are mentioned in the caption/comments (startwith @)
+
+  --fetch_hashtags      fetch hashtags in the caption/comments (startwith #)
+
 ```
 
-###### Optional: geckodriver and phantomjs if not present on your system
+
+### Example
 ```
-bash utils/get_gecko.sh
-bash utils/get_phantomjs.sh
-source utils/set_path.sh
+python crawler.py posts_full -u cal_foodie -n 100 -o ./output
+python crawler.py posts_full -u cal_foodie -n 10 --fetch_likers --fetch_likes_plays
+python crawler.py posts_full -u cal_foodie -n 10 --fetch_comments
+python crawler.py profile -u cal_foodie -o ./output
+python crawler.py hashtag -t taiwan -o ./output
+python crawler.py posts -u cal_foodie -n 100 -o ./output # deprecated
+```
+1. Choose mode `posts`, you will get url, caption, first photo for each post; choose mode `posts_full`, you will get url, caption, all photos, time, comments, number of likes and views for each posts. Mode `posts_full` will take way longer than mode `posts`. **[`posts` is deprecated. For the recent posts, there is no quick way to get the post caption]**
+2. Return default 100 hashtag posts(mode: hashtag) and all user's posts(mode: posts) if not specifying the number of post `-n`, `--number`.
+3. Print the result to the console if not specifying the output path of post `-o`, `--output`.
+4. It takes much longer to get data if the post number is over about 1000 since Instagram has set up the rate limit for data request.
+5. Don't use this repo crawler Instagram if the user has more than 10000 posts.
+
+The data format of `posts`:
+![screen shot 2018-10-11 at 2 33 09 pm](https://user-images.githubusercontent.com/3991678/46835356-cd521d80-cd62-11e8-9bb1-888bc32af484.png)
+
+The data format of `posts_full`:
+<img width="1123" alt="Screen Shot 2019-03-17 at 11 02 24 PM" src="https://user-images.githubusercontent.com/3991678/54510055-1c4f4080-4909-11e9-8d06-8c35a08fb74e.png">
+
+
+## Liker
+![Liker Preivew](https://user-images.githubusercontent.com/3991678/41560884-4bbd42d2-72fd-11e8-8d56-84e7cf7187cd.gif)
+
+
+Set up your username/password in `secret.py` or set them as environment variables.
+
+### Usage
+```
+positional arguments:
+  tag
+
+optional arguments:
+  -n NUMBER, --number NUMBER (default 1000)
+                        number of posts to like
 ```
 
+### Example
+```
+python liker.py foodie
+```

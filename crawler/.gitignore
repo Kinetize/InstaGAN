@@ -1,12 +1,30 @@
-# Default data directory
-data
+*.log
+.DS_Store
+.vscode/
 
-# prevent terrible mistakes
-auth.json
+test.py
+build/
+dist/
 
-# driver logs
-geckodriver.log
-ghostdriver.log
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
 
-# Chromedriver
-chromedriver.exe
+
+# node
+node_modules/
+
+
+*.egg-info/
+
+
+.tox
+
+secret.py
+inscrawler/bin/*
+!inscrawler/bin/.keep
+
+cromedriver.exe
+
+output/
