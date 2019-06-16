@@ -273,12 +273,14 @@ class InsCrawler(Logging):
                     img_url = ele_img.get_attribute("src")
                     urllib.request.urlretrieve(img_url, '../data/img{}.png'.format(i))
 
+                    # Takes hashtags from !all! comments
                     self.browser_level_2.get(key)
-                    ele_post = self.browser_level_2.find_one(".C4VMK div")
-                    ele_hashtags = ele_post.find_elements_by_tag_name("a")
+                    hashtag_elements = self.browser_level_2.driver.find_elements_by_partial_link_text("#")
+                    hashtags = list(map(lambda h: h.text, hashtag_elements))
 
                     key_set.add(key)
-                    posts.append({"key": key, "caption": caption, "img_url": img_url})
+                    posts.append({"key": key, "caption": caption, "img_url": img_url, "hashtags": str(hashtags)})
+
             if pre_post_num == len(posts):
                 pbar.set_description("Wait for %s sec" % (wait_time))
                 sleep(wait_time)
