@@ -1,2 +1,5 @@
 /.idea
 /data
+word2vec_glove/
+output
+*.pickle

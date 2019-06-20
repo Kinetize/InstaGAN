@@ -88,7 +88,7 @@ def binary_representation(dict, data_dir, embedding_filename, img_name='img'):
     return list_bin_vec
 
 
-def word2vec(dict):
+def word2vec(dict_tags, model_dir, model_filename):
     """
     Utilizes a pre-trained word2vec embedding.
     (Maybe: Taking the mean or concatenate all embedding vectors as input)
@@ -97,7 +97,33 @@ def word2vec(dict):
     :param dict:
     :return:
     """
+    words = []
+    idx = 0
+    word2idx = {}
+    vectors = []
+    with open(model_dir + model_filename, 'rb') as f:
+        for l in f:
+            line = l.decode().split()
+            word = line[0]
+            words.append(word)
+            word2idx[word] = idx
+            idx += 1
+            vect = np.array(line[1:]).astype(np.float)
+            vectors.append(vect)
+        print(words[0], '\t', vectors[0])
+    glove = {w: vectors[i] for i, w in enumerate(words)}
 
+    # save word representations for each hash-tag
+    all_vec_rep = []
+    for tags in dict_tags:
+        image_vec_rep = []
+        for tag in tags:
+            if tag in glove:
+                image_vec_rep.append(glove[tag])
+        image_vec_rep = np.array(image_vec_rep)
+        all_vec_rep.append(image_vec_rep)
+    print(all_vec_rep[1].shape)
+    print(all_vec_rep[1])
 
 def load_embedding(data_dir, embedding_filename):
     with open(data_dir + embedding_filename, 'rb') as f:
@@ -115,5 +141,9 @@ if __name__ == '__main__':
     # binary_representation(dict)
     bin_vec = binary_representation(dict_img_to_tags, directory, save_file)
     embeddings = load_embedding(directory, save_file)
-    for tags in dict_img_to_tags:
-        print(tags, '\t', dict_img_to_tags[tags])
+    model_dir = os.path.dirname(os.path.realpath(__file__)) + '/word2vec_glove'
+    model_filename = '/glove.twitter.27B.50d.txt'
+    word2vec(dict_img_to_tags, model_dir, model_filename)
+    # for tags in dict_img_to_tags:
+    #     print(tags, '\t', dict_img_to_tags[tags])
+
