@@ -271,7 +271,7 @@ class InsCrawler(Logging):
                     ele_img = browser.find_one(".KL4Bh img", ele)
                     caption = ele_img.get_attribute("alt")
                     img_url = ele_img.get_attribute("src")
-                    urllib.request.urlretrieve(img_url, '../data/img{}.png'.format(i))
+                    urllib.request.urlretrieve(img_url, '../data/img{}.jpg'.format(i))
 
                     # Takes hashtags from !all! comments
                     self.browser_level_2.get(key)

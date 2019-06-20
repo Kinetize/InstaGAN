@@ -20,7 +20,8 @@ class Browser:
         chrome_options.add_argument("--start-maximized")
         chrome_options.add_argument("--no-sandbox")
         self.driver = webdriver.Chrome(
-            executable_path="C:\Program Files\path_binaries\chromedriver.exe",
+            # executable_path="C:\Program Files\path_binaries\chromedriver.exe",
+            executable_path="%s/bin/chromedriver" % dir_path,
             service_args=service_args,
             chrome_options=chrome_options,
         )
