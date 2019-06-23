@@ -7,17 +7,17 @@ import pickle
 
 def read_hashtags(filename, img_name='img'):
     """
-    Reads the hash-tags from crawler output and converts them into a dictionary
+    Reads the hash-tags from crawler output and converts them into a dictionary.
     :param filename:
     :param img_name:
     :return:
     """
     curr_dir = os.path.dirname(os.path.realpath(__file__))
-    file_path = '%s/crawler/' % curr_dir + filename
+    file_path = '%s/../crawler/' % curr_dir + filename
     with open(file_path, 'r') as file:
         data = json.load(file)
     img_num = len(data)
-    print('Number of imgages:\t', img_num)
+    print('Number of images:\t', img_num)
     tag_dict = {}
     for i, sample in enumerate(data):
         key = img_name + '%s' % i
@@ -25,7 +25,6 @@ def read_hashtags(filename, img_name='img'):
         hashtags = []
         str_begin = False
         str_track = ""
-        # print('Hashtags:\t', hashtags_str)
         for char in hashtags_str:
             if str_begin:
                 if char == "\'":
@@ -37,7 +36,6 @@ def read_hashtags(filename, img_name='img'):
             if char == '#':
                 str_begin = True
         tag_dict[key] = hashtags
-        # print(key, '\t', tag_dict[key])
     return tag_dict
 
 
@@ -51,7 +49,7 @@ def clean_up_tags_bin():
     """
 
 
-def binary_representation(dict, data_dir, embedding_filename, img_name='img'):
+def binary_representation(dict_tags, data_dir, embedding_filename, img_name='img'):
     """
     Counts all occurring hash-tags and assigns each hash-tag a one-hot vector.
     Then assigns each image a binary vector. Each entry represents if the hash-tag is assigned (1) or not(0).
@@ -59,91 +57,111 @@ def binary_representation(dict, data_dir, embedding_filename, img_name='img'):
 
     :param dict: (String, [String]) Dictionary which points from the image name towards a list of hash-tags
     """
+
     # Make dictionaries which point towards the index of the given hashtag
-    img_number = len(dict)
     dict_tag_to_pos = {}
     dict_pos_to_tag = {}
     pos = 0
-    for tag_list in dict.values():
+    for tag_list in dict_tags.values():
         for tag in tag_list:
             if tag not in dict_tag_to_pos:
                 dict_tag_to_pos[tag] = pos
                 dict_pos_to_tag[pos] = tag
                 pos += 1
     binary_vec_size = pos
-    print(binary_vec_size)
+
     # generate binary vectors
     list_bin_vec = []
-    for i in range(img_number):
+    list_id = []
+    for img_id in dict_tags:
         vec = np.zeros(binary_vec_size)
-        tags = dict[img_name + '%s' % i]
-        for tag in tags:
+        # img_id = img_name + '%s' % i
+        # tags = dict[img_id]
+        for tag in dict_tags[img_id]:
             entry = dict_tag_to_pos[tag]
             vec[entry] = 1
         list_bin_vec.append(vec)
-    save_loc = data_dir + embedding_filename
-    print('Saving .pickle file at %s' % save_loc)
-    with open(save_loc, 'wb') as f:
+        list_id.append(img_id)
+    save_embeddings = data_dir + embedding_filename
+    save_filenames = data_dir + '/../data/filenames_bin.pickle'
+    # print('Saving binary vectors at %s' % save_embeddings)
+    with open(save_embeddings, 'wb') as f:
         pickle.dump(list_bin_vec, f)
+    # print('Saving file-names at %s' % save_filenames)
+    with open(save_filenames, 'wb') as f:
+        pickle.dump(list_id, f)
     return list_bin_vec
 
 
-def word2vec(dict_tags, model_dir, model_filename):
+def word2vec(dict_tags, data_dir, embedding_filename):
     """
     Utilizes a pre-trained word2vec embedding.
     (Maybe: Taking the mean or concatenate all embedding vectors as input)
     Saves the embedding for each hash-tag into a .pickle file
 
-    :param dict:
+    :param dict_tags:
+    :param model_dir:
+    :param model_filename:
     :return:
     """
+
     words = []
-    idx = 0
-    word2idx = {}
     vectors = []
-    with open(model_dir + model_filename, 'rb') as f:
+    with open(data_dir + embedding_filename, 'rb') as f:
         for l in f:
             line = l.decode().split()
             word = line[0]
             words.append(word)
-            word2idx[word] = idx
-            idx += 1
             vect = np.array(line[1:]).astype(np.float)
             vectors.append(vect)
-        print(words[0], '\t', vectors[0])
     glove = {w: vectors[i] for i, w in enumerate(words)}
 
-    # save word representations for each hash-tag
+    # save word representations for each hash-tag which is in the data
     all_vec_rep = []
+    list_id = []
+    list_hash_tag = []
     for tags in dict_tags:
         image_vec_rep = []
-        for tag in tags:
+        for tag in dict_tags[tags]:
             if tag in glove:
                 image_vec_rep.append(glove[tag])
+                list_hash_tag.append(tag)
         image_vec_rep = np.array(image_vec_rep)
         all_vec_rep.append(image_vec_rep)
-    print(all_vec_rep[1].shape)
-    print(all_vec_rep[1])
-
-def load_embedding(data_dir, embedding_filename):
-    with open(data_dir + embedding_filename, 'rb') as f:
-        embeddings = pickle.load(f)
-        embeddings = np.array(embeddings)
-        # embedding_shape = [embeddings.shape[-1]]
-        print('embeddings: ', embeddings.shape)
-    return embeddings
+        list_id.append(tags)
+    save_embeddings = '../data/vec_emb.pickle'
+    save_filenames = '../data/filenames_emb.pickle'
+    save_img_hashtags = '../data/hashtags.txt'
+    # print('Saving .pickle file at %s' % save_embeddings)
+    with open(save_embeddings, 'wb') as f:
+        pickle.dump(all_vec_rep, f)
+    # print('Saving file-names at %s' % save_filenames)
+    with open(save_filenames, 'wb') as f:
+        pickle.dump(list_id, f)
+    with open(save_img_hashtags, 'w') as f:
+        for img_id in list_id:
+            f.write(img_id + '\n')
+            for tag in dict_tags[img_id]:
+                f.write('\t' + tag + '\n')
+#
+#
+# def load_embedding(data_dir, embedding_filename):
+#     with open(data_dir + embedding_filename, 'rb') as f:
+#         embeddings = pickle.load(f)
+#         embeddings = np.array(embeddings)
+#         # embedding_shape = [embeddings.shape[-1]]
+#         print('embeddings: ', embeddings.shape)
+#     return embeddings
 
 
 if __name__ == '__main__':
     directory = os.path.dirname(os.path.realpath(__file__))
-    save_file = '/tryout.pickle'
+    save_file = '/../data/vec_bin.pickle'
     dict_img_to_tags = read_hashtags('output')
-    # binary_representation(dict)
-    bin_vec = binary_representation(dict_img_to_tags, directory, save_file)
-    embeddings = load_embedding(directory, save_file)
-    model_dir = os.path.dirname(os.path.realpath(__file__)) + '/word2vec_glove'
-    model_filename = '/glove.twitter.27B.50d.txt'
-    word2vec(dict_img_to_tags, model_dir, model_filename)
-    # for tags in dict_img_to_tags:
-    #     print(tags, '\t', dict_img_to_tags[tags])
 
+    bin_vec = binary_representation(dict_img_to_tags, directory, save_file)
+
+    model_dir = os.path.dirname(os.path.realpath(__file__)) + '/word2vec_glove'
+    model_filename = '/glove.twitter.27B.25d.txt'
+    word2vec(dict_img_to_tags, model_dir, model_filename)
+    print('done.')
