@@ -88,7 +88,6 @@ def main(data_set, hyperparameters, device):
     plt.show()
     for epoch in range(epochs):
         print("Epoch: ", epoch)
-        G_result = None
         for i, x_ in enumerate(data_loader):
             D.zero_grad()
 
@@ -127,10 +126,19 @@ def main(data_set, hyperparameters, device):
             G_train_loss = BCE_loss(D_result, y_)
             G_train_loss.backward()
             G_optimizer.step()
-            print("G_loss: " + str(G_train_loss) + " D_loss: " + str(D_train_loss))
+            print("Epoch " + str(epoch) + " G_loss: " + str(float(G_train_loss)) + " D_loss: " + str(float(D_train_loss)))
+    
+        G_result = None
+        with torch.no_grad():
+            num_samples = 10
+            z_ = torch.randn((num_samples, noise_size))
+            z_ = torch.autograd.Variable(z_.to(device))
+            G_result = G(z_)
         
-        plt.imshow(G_result[0].cpu().permute(1,2,0).detach())
-        plt.pause(0.01)
+        for i, res in enumerate(G_result):
+            plt.subplot(1, len(G_result), i+1)
+            plt.imshow(res.cpu().permute(1,2,0).detach())
+            plt.pause(0.01)
 
 
 
@@ -142,7 +150,7 @@ hyperparameters = {
     "img_size": img_size,
     "img_shape": img_shape,
     "noise_size": 100,
-    "lr": 0.00001,
+    "lr": 0.0001,
     "epochs": 100,
     "batch_size": 8,
     "shuffle": True

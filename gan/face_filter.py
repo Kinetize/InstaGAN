@@ -4,7 +4,7 @@ import shutil
 import numpy as np
 
 
-thres = 1/10
+thres = 1/5
 img_src_path = os.path.join("..", "data_filtered")
 img_dest_path = os.path.join("..", "data_filtered" + (("_thres_" + str(round(thres, 4)*100)) if thres is not None else ""))
 if not os.path.isdir(img_dest_path):
