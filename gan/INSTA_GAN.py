@@ -100,17 +100,13 @@ def main(data_set, hyperparameters, device):
             x_, y_real_, y_fake_ = torch.autograd.Variable(x_.to(device)), torch.autograd.Variable(y_real_.to(device)), torch.autograd.Variable(y_fake_.to(device))
 
             D_result = D(x_)
-            print(D_result.shape)
-            print(len(x_))
             D_real_loss = BCE_loss(D_result, y_real_)
             
             z_ = torch.randn((current_batch_size, noise_size))
             z_ = torch.autograd.Variable(z_.to(device))
             G_result = G(z_)
-            print("G_result: " + str(G_result.shape))
 
             D_result = D(G_result)
-            print("D_result2: " + str(D_result.shape))
             D_fake_loss = BCE_loss(D_result, y_fake_)
 
             D_train_loss = D_real_loss + D_fake_loss
