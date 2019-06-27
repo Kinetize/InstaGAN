@@ -146,7 +146,7 @@ class InsCrawler(Logging):
     def get_latest_posts_by_tag(self, tag, num):
         url = "%s/explore/tags/%s/" % (InsCrawler.URL, tag)
         self.browser.get(url)
-        return self._get_posts(num)
+        return self._get_posts(num, tag)
 
     def auto_like(self, tag="", maximum=1000):
         self.login()
@@ -249,7 +249,7 @@ class InsCrawler(Logging):
             posts.sort(key=lambda post: post["datetime"], reverse=True)
         return posts
 
-    def _get_posts(self, num):
+    def _get_posts(self, num, tag):
         """
             To get posts, we have to click on the load more
             button and make the browser call post api.
@@ -265,13 +265,18 @@ class InsCrawler(Logging):
 
         def start_fetching(pre_post_num, wait_time):
             ele_posts = browser.find(".v1Nh3 a")
+            print("Number of posts: " + str(len(ele_posts)))
             for i, ele in enumerate(ele_posts):
                 key = ele.get_attribute("href")
                 if key not in key_set:
                     ele_img = browser.find_one(".KL4Bh img", ele)
                     caption = ele_img.get_attribute("alt")
                     img_url = ele_img.get_attribute("src")
-                    urllib.request.urlretrieve(img_url, '../data/img{}.jpg'.format(i))
+
+                    key_regex = re.compile("([^\/]+)\/$")
+                    key_id = key_regex.findall(key)[0]
+                    # print("key: " + str(key))
+                    # print("key matches: " + str(key_id))
 
                     # Takes hashtags from !all! comments
                     self.browser_level_2.get(key)
@@ -279,7 +284,9 @@ class InsCrawler(Logging):
                     hashtags = list(map(lambda h: h.text, hashtag_elements))
 
                     key_set.add(key)
-                    posts.append({"key": key, "caption": caption, "img_url": img_url, "hashtags": str(hashtags)})
+                    if ("#" + tag) in hashtags:
+                        urllib.request.urlretrieve(img_url, '../data/{}.jpg'.format(key_id))
+                        posts.append({"key": key, "caption": caption, "img_url": img_url, "hashtags": hashtags})
 
             if pre_post_num == len(posts):
                 pbar.set_description("Wait for %s sec" % (wait_time))

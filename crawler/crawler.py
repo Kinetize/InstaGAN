@@ -4,6 +4,7 @@ from __future__ import unicode_literals
 import argparse
 import json
 import sys
+import os
 from io import open
 
 from inscrawler import InsCrawler
@@ -51,8 +52,17 @@ def arg_required(args, fields=[]):
 
 
 def output(data, filepath):
-    out = json.dumps(data, ensure_ascii=False)
+    prev = []
+    if os.path.isfile(filepath):
+        fd = open(filepath, "r")
+        prev = json.loads(fd.read())
+
+    full_data = prev + data
     if filepath:
+        with open(filepath + "_old", "w", encoding="utf8") as f:
+            out = json.dumps(prev, ensure_ascii=False)
+            f.write(out)
+        out = json.dumps(full_data, ensure_ascii=False)
         with open(filepath, "w", encoding="utf8") as f:
             f.write(out)
     else:
