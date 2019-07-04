@@ -6,7 +6,7 @@ import os
 import re
 import sys
 import time
-import urllib.request
+import urllib
 import traceback
 from builtins import open
 from time import sleep

@@ -1,4 +1,6 @@
 import importlib
+import numpy as np
+import json
 import torch
 import torchvision
 import PIL
@@ -56,6 +58,27 @@ class Discriminator(torch.nn.Module):
         x = torch.sigmoid(self.linear(self.conv4(x).view(-1, 1024 * 2 * 2)))
         return x
 
+def compute_gradient_penalty(D, real_samples, fake_samples, device):
+    """Calculates the gradient penalty loss for WGAN GP"""
+    # Random weight term for interpolation between real and fake samples
+    alpha = torch.Tensor(np.random.random((real_samples.size(0), 1, 1, 1))).to(device)
+    # Get random interpolation between real and fake samples
+    interpolates = (alpha * real_samples + ((1 - alpha) * fake_samples)).to(device).requires_grad_(True)
+    d_interpolates = D(interpolates)
+    fake = torch.autograd.Variable(torch.Tensor(real_samples.shape[0], 1).to(device).fill_(1.0), requires_grad=False)
+    # Get gradient w.r.t. interpolates
+    gradients = torch.autograd.grad(
+        outputs=d_interpolates,
+        inputs=interpolates,
+        grad_outputs=fake,
+        create_graph=True,
+        retain_graph=True,
+        only_inputs=True,
+    )[0]
+    gradients = gradients.view(gradients.size(0), -1)
+    gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
+    return gradient_penalty
+
 def main(data_set, hyperparameters, device):
     image_path = os.path.join("..", "data")
 
@@ -86,6 +109,8 @@ def main(data_set, hyperparameters, device):
 
     plt.ion()
     plt.figure()
+    print(json.dumps(hyperparameters))
+    plt.title(json.dumps(hyperparameters))
     plt.show()
     for epoch in range(epochs):
         print("Epoch: ", epoch)
@@ -93,42 +118,47 @@ def main(data_set, hyperparameters, device):
             D.zero_grad()
 
     #        x_ = x_.view(-1, img_flat_size)
-            
+           
+            # Dicriminator real
             current_batch_size = len(x_) 
             y_real_ = torch.ones(current_batch_size)
             y_fake_ = torch.zeros(current_batch_size)
             x_, y_real_, y_fake_ = torch.autograd.Variable(x_.to(device)), torch.autograd.Variable(y_real_.to(device)), torch.autograd.Variable(y_fake_.to(device))
 
-            D_result = D(x_)
-            D_real_loss = BCE_loss(D_result, y_real_)
+            D_real_validity = D(x_)
             
+            # Discriminator fake
             z_ = torch.randn((current_batch_size, noise_size))
             z_ = torch.autograd.Variable(z_.to(device))
             G_result = G(z_)
 
-            D_result = D(G_result)
-            D_fake_loss = BCE_loss(D_result, y_fake_)
+            gradient_penalty = compute_gradient_penalty(D, x_, G_result, device)
 
-            D_train_loss = D_real_loss + D_fake_loss
+            D_fake_validity = D(G_result)
+
+            D_train_loss = -torch.mean(D_real_validity) + torch.mean(D_fake_validity) + hyperparameters["lambda_gp"] * gradient_penalty
 
             D_train_loss.backward()
             D_optimizer.step()
 
-            G.zero_grad()
+            # Generator
+            if i % hyperparameters["num_critic"] == 0:   
+                G.zero_grad()
 
-            z_ = torch.randn((current_batch_size, noise_size))
-            z_ = torch.autograd.Variable(z_.to(device))
 
-            y_ = torch.ones(current_batch_size)
-            y_ = torch.autograd.Variable(y_.to(device))
+                z_ = torch.randn((current_batch_size, noise_size))
+                z_ = torch.autograd.Variable(z_.to(device))
 
-            G_result = G(z_)
-            D_result = D(G_result)
-            G_train_loss = BCE_loss(D_result, y_)
-            G_train_loss.backward()
-            G_optimizer.step()
-            print("Epoch " + str(epoch) + " G_loss: " + str(float(G_train_loss)) + " D_loss: " + str(float(D_train_loss)))
-    
+                y_ = torch.ones(current_batch_size)
+                y_ = torch.autograd.Variable(y_.to(device))
+
+                G_result = G(z_)
+                D_fake_validity = D(G_result)
+                G_train_loss = -torch.mean(D_fake_validity) #BCE_loss(D_result, y_)
+                G_train_loss.backward()
+                G_optimizer.step()
+                print("Epoch " + str(epoch) + " G_loss: " + str(float(G_train_loss)) + " D_loss: " + str(float(D_train_loss)))
+        
         G_result = None
         with torch.no_grad():
             num_samples = 10
@@ -153,9 +183,11 @@ hyperparameters = {
     "noise_size": 100,
     "lr": 0.0001,
     "epochs": 10000,
-    "batch_size": 32,
+    "batch_size": 16,
     "shuffle": True,
-    "num_img": None
+    "num_img": None,
+    "lambda_gp": 10,
+    "num_critic": 5
 }
 
 
