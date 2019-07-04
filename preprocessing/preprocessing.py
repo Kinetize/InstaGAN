@@ -3,6 +3,7 @@ import os
 import json
 import numpy as np
 import pickle
+import re
 
 
 def read_hashtags(filename, img_name='img'):
@@ -20,21 +21,9 @@ def read_hashtags(filename, img_name='img'):
     print('Number of images:\t', img_num)
     tag_dict = {}
     for i, sample in enumerate(data):
-        key = img_name + '%s' % i
-        hashtags_str = sample['hashtags']
-        hashtags = []
-        str_begin = False
-        str_track = ""
-        for char in hashtags_str:
-            if str_begin:
-                if char == "\'":
-                    str_begin = False
-                    hashtags.append(str_track)
-                    str_track = ""
-                else:
-                    str_track += char
-            if char == '#':
-                str_begin = True
+        key_regex = re.compile("([^\/]+)\/$")
+        key = key_regex.findall(sample['key'])[0]
+        hashtags = [s.replace("#", "") for s in sample['hashtags']]
         tag_dict[key] = hashtags
     return tag_dict
 
@@ -126,12 +115,12 @@ def word2vec(dict_tags, data_dir, embedding_filename):
             if tag in glove:
                 image_vec_rep.append(glove[tag])
                 list_hash_tag.append(tag)
-        image_vec_rep = np.array(image_vec_rep)
+        image_vec_rep = np.sum(np.array(image_vec_rep), axis=0)
         all_vec_rep.append(image_vec_rep)
         list_id.append(tags)
-    save_embeddings = '../data/vec_emb.pickle'
-    save_filenames = '../data/filenames_emb.pickle'
-    save_img_hashtags = '../data/hashtags.txt'
+    save_embeddings = '../StackGAN-Pytorch/data/vec_emb.pickle'
+    save_filenames = '../StackGAN-Pytorch/data/filenames.pickle'
+    save_img_hashtags = '../StackGAN-Pytorch/data/hashtags.txt'
     # print('Saving .pickle file at %s' % save_embeddings)
     with open(save_embeddings, 'wb') as f:
         pickle.dump(all_vec_rep, f)
@@ -143,25 +132,29 @@ def word2vec(dict_tags, data_dir, embedding_filename):
             f.write(img_id + '\n')
             for tag in dict_tags[img_id]:
                 f.write('\t' + tag + '\n')
-#
-#
-# def load_embedding(data_dir, embedding_filename):
-#     with open(data_dir + embedding_filename, 'rb') as f:
-#         embeddings = pickle.load(f)
-#         embeddings = np.array(embeddings)
-#         # embedding_shape = [embeddings.shape[-1]]
-#         print('embeddings: ', embeddings.shape)
-#     return embeddings
+
+
+def load_embedding(data_dir, embedding_filename):
+    with open(data_dir + embedding_filename, 'rb') as f:
+        embeddings = pickle.load(f)
+        embeddings = np.array(embeddings)
+        # embedding_shape = [embeddings.shape[-1]]
+        print('embeddings: ', embeddings[0].dtype)
 
 
 if __name__ == '__main__':
     directory = os.path.dirname(os.path.realpath(__file__))
     save_file = '/../data/vec_bin.pickle'
+    img_folder = '../data_filtered_thres_10.0'
+    img_names = dict([(name.split(".")[0], None) for name in os.listdir(img_folder)])
     dict_img_to_tags = read_hashtags('output')
+    dict_img_to_tags_filtered = dict([(key, hashtags) for key, hashtags in dict_img_to_tags.items() if key in img_names])
 
-    bin_vec = binary_representation(dict_img_to_tags, directory, save_file)
+    # bin_vec = binary_representation(dict_img_to_tags, directory, save_file)
 
-    model_dir = os.path.dirname(os.path.realpath(__file__)) + '/word2vec_glove'
-    model_filename = '/glove.twitter.27B.25d.txt'
-    word2vec(dict_img_to_tags, model_dir, model_filename)
+    model_dir = os.path.dirname(os.path.realpath(__file__))
+    model_filename = '/glove.twitter.27B.50d.txt'
+    word2vec(dict_img_to_tags_filtered, model_dir, model_filename)
+    load_embedding('../StackGAN-Pytorch/data/', 'filenames.pickle')
+    load_embedding('../StackGAN-Pytorch/data/', 'vec_emb.pickle')
     print('done.')

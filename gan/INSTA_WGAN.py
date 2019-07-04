@@ -14,6 +14,7 @@ class InstaDataset(torch.utils.data.Dataset):
             img = PIL.Image.open(os.path.join(image_path, image)).convert("RGB")
             target_img = img.resize(target_size, PIL.Image.BILINEAR)
             img_tensor = torchvision.transforms.functional.to_tensor(target_img)
+            print(img_tensor)
             self.images.append(img_tensor)
     def __getitem__(self, index):
         return self.images[index]
@@ -30,14 +31,17 @@ class Generator(torch.nn.Module):
         self.deconv2_bn = torch.nn.BatchNorm2d(d*4)
         self.deconv3 = torch.nn.ConvTranspose2d(d*4, d*2, 4, 2, 1)
         self.deconv3_bn = torch.nn.BatchNorm2d(d*2)
-        self.deconv4 = torch.nn.ConvTranspose2d(d*2, 3, 4, 2, 1)
+        self.deconv4 = torch.nn.ConvTranspose2d(d*2, d*2, 4, 2, 1)
+        self.deconv4_bn = torch.nn.BatchNorm2d(d)
+        self.deconv5 = torch.nn.ConvTranspose2d(d, 3, 4, 2, 1)
         
     def forward(self, input):
         input = input.expand(1, 1, -1, -1).permute(2, 3, 0, 1)
         x = torch.nn.functional.relu(self.deconv1_bn(self.deconv1(input)))
         x = torch.nn.functional.relu(self.deconv2_bn(self.deconv2(x)))
         x = torch.nn.functional.relu(self.deconv3_bn(self.deconv3(x)))
-        x = torch.sigmoid(self.deconv4(x))
+        x = torch.nn.functional.relu(self.deconv4_bn(self.deconv4(x)))
+        x = torch.tanh(self.deconv5(x))
         return x
  
 class Discriminator(torch.nn.Module):
@@ -181,7 +185,7 @@ hyperparameters = {
     "img_size": img_size,
     "img_shape": img_shape,
     "noise_size": 100,
-    "lr": 0.0001,
+    "lr": 0.0002,
     "epochs": 10000,
     "batch_size": 16,
     "shuffle": True,

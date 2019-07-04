@@ -11,7 +11,7 @@ class InstaDataset(torch.utils.data.Dataset):
         for image in img_files[:num_img] if num_img is not None else img_files:
             img = PIL.Image.open(os.path.join(image_path, image)).convert("RGB")
             target_img = img.resize(target_size, PIL.Image.BILINEAR)
-            img_tensor = torchvision.transforms.functional.to_tensor(target_img)
+            img_tensor = torchvision.transforms.functional.to_tensor(target_img) * 2 - 1
             self.images.append(img_tensor)
     def __getitem__(self, index):
         return self.images[index]
@@ -28,14 +28,20 @@ class Generator(torch.nn.Module):
         self.deconv2_bn = torch.nn.BatchNorm2d(d*4)
         self.deconv3 = torch.nn.ConvTranspose2d(d*4, d*2, 4, 2, 1)
         self.deconv3_bn = torch.nn.BatchNorm2d(d*2)
-        self.deconv4 = torch.nn.ConvTranspose2d(d*2, 3, 4, 2, 1)
+        self.deconv4 = torch.nn.ConvTranspose2d(d*2, d, 4, 2, 1)
+        self.deconv4_bn = torch.nn.BatchNorm2d(d)
+        self.deconv5 = torch.nn.ConvTranspose2d(d, 3, 4, 2, 1)
+    def weight_init(self, mean, std):
+        for m in self._modules:
+            normal_init(self._modules[m], mean, std)
         
     def forward(self, input):
         input = input.expand(1, 1, -1, -1).permute(2, 3, 0, 1)
         x = torch.nn.functional.relu(self.deconv1_bn(self.deconv1(input)))
         x = torch.nn.functional.relu(self.deconv2_bn(self.deconv2(x)))
         x = torch.nn.functional.relu(self.deconv3_bn(self.deconv3(x)))
-        x = torch.sigmoid(self.deconv4(x))
+        x = torch.nn.functional.relu(self.deconv4_bn(self.deconv4(x)))
+        x = torch.tanh(self.deconv5(x))
         return x
  
 class Discriminator(torch.nn.Module):
@@ -47,14 +53,23 @@ class Discriminator(torch.nn.Module):
         self.conv3 = torch.nn.Conv2d(d*2, d*4, 4, 2, 1)
         self.conv3_bn = torch.nn.BatchNorm2d(d*4)
         self.conv4 = torch.nn.Conv2d(d*4, d*8, 4, 2, 1)
-        self.linear = torch.nn.Linear(1024 * 2 * 2, 1)
+        self.conv4_bn = torch.nn.BatchNorm2d(d*8)
+        self.conv5 = torch.nn.Conv2d(d*8, 1, 4, 1, 0)
+    def weight_init(self, mean, std):
+        for m in self._modules:
+            normal_init(self._modules[m], mean, std)
 
     def forward(self, input):
         x = torch.nn.functional.leaky_relu(self.conv1(input), 0.2)
         x = torch.nn.functional.leaky_relu(self.conv2_bn(self.conv2(x)), 0.2)
         x = torch.nn.functional.leaky_relu(self.conv3_bn(self.conv3(x)), 0.2)
-        x = torch.sigmoid(self.linear(self.conv4(x).view(-1, 1024 * 2 * 2)))
+        x = torch.nn.functional.leaky_relu(self.conv4_bn(self.conv4(x)), 0.2)
+        x = torch.sigmoid(self.conv5(x))
         return x
+def normal_init(m, mean, std):
+    if isinstance(m, torch.nn.ConvTranspose2d) or isinstance(m, torch.nn.Conv2d):
+        m.weight.data.normal_(mean, std)
+        m.bias.data.zero_()
 
 def main(data_set, hyperparameters, device):
     image_path = os.path.join("..", "data")
@@ -82,6 +97,8 @@ def main(data_set, hyperparameters, device):
     # Adam optimizer
     G_optimizer = torch.optim.Adam(G.parameters(), lr=lr)
     D_optimizer = torch.optim.Adam(D.parameters(), lr=lr)
+    G.weight_init(mean=0.0, std=0.02)
+    D.weight_init(mean=0.0, std=0.02)
 
 
     plt.ion()
@@ -128,32 +145,31 @@ def main(data_set, hyperparameters, device):
             G_train_loss.backward()
             G_optimizer.step()
             print("Epoch " + str(epoch) + " G_loss: " + str(float(G_train_loss)) + " D_loss: " + str(float(D_train_loss)))
-    
-        G_result = None
-        with torch.no_grad():
-            num_samples = 10
-            z_ = torch.randn((num_samples, noise_size))
-            z_ = torch.autograd.Variable(z_.to(device))
-            G_result = G(z_)
-        
-        for i, res in enumerate(G_result):
-            plt.subplot(1, len(G_result), i+1)
-            plt.imshow(res.cpu().permute(1,2,0).detach())
-            plt.pause(0.01)
+        if epoch % 10 == 0: 
+            G_result = None
+            with torch.no_grad():
+                num_samples = 10
+                z_ = torch.randn((num_samples, noise_size))
+                z_ = torch.autograd.Variable(z_.to(device))
+                G_result = G(z_)
+            
+            for i, res in enumerate(G_result):
+                plt.subplot(1, len(G_result), i+1)
+                plt.imshow((res.cpu().permute(1,2,0).detach() + 1)/2)
+                plt.pause(0.01)
 
 
 
 
-
-img_size = 32
+img_size = 64
 img_shape = (img_size, img_size)
 hyperparameters = {
     "img_size": img_size,
     "img_shape": img_shape,
     "noise_size": 100,
-    "lr": 0.0001,
+    "lr": 0.0002,
     "epochs": 10000,
-    "batch_size": 32,
+    "batch_size": 128,
     "shuffle": True,
     "num_img": None
 }
