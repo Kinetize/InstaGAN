@@ -69,6 +69,7 @@ def main(data_set, hyperparameters, device):
     batch_size = hyperparameters["batch_size"]
     shuffle = hyperparameters["shuffle"]
     img_shape = hyperparameters["img_shape"]
+    num_img = hyperparameters["num_img"]
 
     data_loader = torch.utils.data.DataLoader(data_set, batch_size=batch_size, shuffle=shuffle)
 
@@ -153,7 +154,8 @@ hyperparameters = {
     "lr": 0.0001,
     "epochs": 100,
     "batch_size": 8,
-    "shuffle": True
+    "shuffle": True,
+    "num_img": None
 }
 
 
