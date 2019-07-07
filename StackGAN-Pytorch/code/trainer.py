@@ -20,8 +20,8 @@ from miscc.utils import save_img_results, save_model
 from miscc.utils import KL_loss
 from miscc.utils import compute_discriminator_loss, compute_generator_loss
 
-from tensorboard import summary
-from tensorboard import FileWriter
+from tensorboardX import summary
+from tensorboardX import FileWriter
 
 
 class GANTrainer(object):
@@ -37,13 +37,19 @@ class GANTrainer(object):
 
         self.max_epoch = cfg.TRAIN.MAX_EPOCH
         self.snapshot_interval = cfg.TRAIN.SNAPSHOT_INTERVAL
-
-        s_gpus = cfg.GPU_ID.split(',')
-        self.gpus = [int(ix) for ix in s_gpus]
-        self.num_gpus = len(self.gpus)
-        self.batch_size = cfg.TRAIN.BATCH_SIZE * self.num_gpus
-        torch.cuda.set_device(self.gpus[0])
-        cudnn.benchmark = True
+        if cfg.CUDA:
+            s_gpus = cfg.GPU_ID.split(',')
+            self.gpus = [int(ix) for ix in s_gpus]
+            self.num_gpus = len(self.gpus)
+            self.batch_size = cfg.TRAIN.BATCH_SIZE * self.num_gpus
+            torch.cuda.set_device(self.gpus[0])
+            cudnn.benchmark = True
+        else:
+            s_gpus = cfg.GPU_ID.split(',')
+            self.gpus = [int(ix) for ix in s_gpus]
+            self.num_gpus = len(self.gpus)
+            self.batch_size = cfg.TRAIN.BATCH_SIZE
+            cudnn.benchmark = False
 
     # ############# For training stageI GAN #############
     def load_network_stageI(self):
@@ -169,8 +175,11 @@ class GANTrainer(object):
                 ######################################################
                 noise.data.normal_(0, 1)
                 inputs = (txt_embedding, noise)
-                _, fake_imgs, mu, logvar = \
-                    nn.parallel.data_parallel(netG, inputs, self.gpus)
+                if cfg.CUDA:
+                    _, fake_imgs, mu, logvar = \
+                        nn.parallel.data_parallel(netG, inputs, self.gpus)
+                else:
+                    _, fake_imgs, mu, logvar = netG(*inputs)
 
                 ############################
                 # (3) Update D network
@@ -195,12 +204,12 @@ class GANTrainer(object):
 
                 count = count + 1
                 if i % 100 == 0:
-                    summary_D = summary.scalar('D_loss', errD.data[0])
+                    summary_D = summary.scalar('D_loss', errD.data.item())
                     summary_D_r = summary.scalar('D_loss_real', errD_real)
                     summary_D_w = summary.scalar('D_loss_wrong', errD_wrong)
                     summary_D_f = summary.scalar('D_loss_fake', errD_fake)
-                    summary_G = summary.scalar('G_loss', errG.data[0])
-                    summary_KL = summary.scalar('KL_loss', kl_loss.data[0])
+                    summary_G = summary.scalar('G_loss', errG.data.item())
+                    summary_KL = summary.scalar('KL_loss', kl_loss.data.item())
 
                     self.summary_writer.add_summary(summary_D, count)
                     self.summary_writer.add_summary(summary_D_r, count)
@@ -211,8 +220,11 @@ class GANTrainer(object):
 
                     # save the image result for each epoch
                     inputs = (txt_embedding, fixed_noise)
-                    lr_fake, fake, _, _ = \
-                        nn.parallel.data_parallel(netG, inputs, self.gpus)
+                    if cfg.CUDA:
+                        lr_fake, fake, _, _ = \
+                            nn.parallel.data_parallel(netG, inputs, self.gpus)
+                    else:
+                        lr_fake, fake, _, _ = netG(*inputs)
                     save_img_results(real_img_cpu, fake, epoch, self.image_dir)
                     if lr_fake is not None:
                         save_img_results(None, lr_fake, epoch, self.image_dir)
@@ -222,7 +234,7 @@ class GANTrainer(object):
                      Total Time: %.2fsec
                   '''
                   % (epoch, self.max_epoch, i, len(data_loader),
-                     errD.data[0], errG.data[0], kl_loss.data[0],
+                     errD.data.item(), errG.data.item(), kl_loss.data.item(),
                      errD_real, errD_wrong, errD_fake, (end_t - start_t)))
             if epoch % self.snapshot_interval == 0:
                 save_model(netG, netD, epoch, self.model_dir)

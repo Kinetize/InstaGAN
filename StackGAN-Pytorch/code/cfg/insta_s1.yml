@@ -2,7 +2,8 @@ CONFIG_NAME: 'stageI'
 
 DATASET_NAME: 'insta'
 EMBEDDING_TYPE: 'glove'
-GPU_ID: '0,1'
+GPU_ID: '-1'
+CUDA: False
 Z_DIM: 100
 DATA_DIR: '../data/insta'
 IMSIZE: 64
@@ -25,4 +26,4 @@ GAN:
     GF_DIM: 192
 
 TEXT:
-    DIMENSION: 50
+    DIMENSION: 25

@@ -51,7 +51,7 @@ class CA_NET(nn.Module):
         self.relu = nn.ReLU()
 
     def encode(self, text_embedding):
-        x = self.relu(self.fc(text_embedding))
+        x = self.relu(self.fc(text_embedding.float()))
         mu = x[:, :self.c_dim]
         logvar = x[:, self.c_dim:]
         return mu, logvar
