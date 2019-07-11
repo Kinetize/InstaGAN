@@ -59,7 +59,7 @@ class CA_NET(nn.Module):
     def reparametrize(self, mu, logvar):
         std = logvar.mul(0.5).exp_()
         if cfg.CUDA:
-            eps = torch.cuda.FloatTensor(std.size()).normal_()
+            eps = torch.cuda.FloatTensor(std.size()).normal_().to(std.device)
         else:
             eps = torch.FloatTensor(std.size()).normal_()
         eps = Variable(eps)
@@ -190,15 +190,11 @@ class STAGE1_D(nn.Module):
 
 # ############# Networks for stageII GAN #############
 class STAGE2_G(nn.Module):
-    def __init__(self, STAGE1_G):
+    def __init__(self):
         super(STAGE2_G, self).__init__()
         self.gf_dim = cfg.GAN.GF_DIM
         self.ef_dim = cfg.GAN.CONDITION_DIM
         self.z_dim = cfg.Z_DIM
-        self.STAGE1_G = STAGE1_G
-        # fix parameters of stageI GAN
-        for param in self.STAGE1_G.parameters():
-            param.requires_grad = False
         self.define_module()
 
     def _make_layer(self, block, channel_num):
@@ -239,9 +235,7 @@ class STAGE2_G(nn.Module):
             conv3x3(ngf // 4, 3),
             nn.Tanh())
 
-    def forward(self, text_embedding, noise):
-        _, stage1_img, _, _ = self.STAGE1_G(text_embedding, noise)
-        stage1_img = stage1_img.detach()
+    def forward(self, text_embedding, stage1_img):
         encoded_img = self.encoder(stage1_img)
 
         c_code, mu, logvar = self.ca_net(text_embedding)

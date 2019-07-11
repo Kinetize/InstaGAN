@@ -4,7 +4,14 @@ import json
 import numpy as np
 import pickle
 import re
+import pprint
 
+
+def read_blacklist():
+    with open('blacklist.txt', 'r') as f:
+        blacklisted_tags = f.readlines()
+
+    return [t.strip() for t in blacklisted_tags]
 
 def read_hashtags(filename, img_name='img'):
     """
@@ -20,13 +27,37 @@ def read_hashtags(filename, img_name='img'):
     img_num = len(data)
     print('Number of images:\t', img_num)
     tag_dict = {}
+
+    blacklisted_tags = read_blacklist()
+
     for i, sample in enumerate(data):
         key_regex = re.compile("([^\/]+)\/$")
         key = key_regex.findall(sample['key'])[0]
         hashtags = [s.replace("#", "") for s in sample['hashtags']]
         tag_dict[key] = hashtags
-    return tag_dict
 
+    hashtag_counts = get_hashtag_counts(tag_dict)
+    tag_dict_filtered = {}
+    for key in tag_dict.keys():
+        hashtags = tag_dict[key]
+        hashtags = [h for h in dict.fromkeys(hashtags).keys() if h not in blacklisted_tags]
+        hashtags_sorted = sorted(hashtags, key=lambda item: hashtag_counts[item])        
+        tag_dict_filtered[key] = hashtags_sorted[-5:]
+        # print(tag_dict_filtered[key])
+
+    return tag_dict_filtered
+
+
+def get_hashtag_counts(hashtag_dict):
+    counts = {}
+    for key in hashtag_dict.keys():
+        for hashtag in hashtag_dict[key]:
+            try:
+                counts[hashtag] += 1
+            except KeyError:
+                counts[hashtag] = 1
+
+    return counts
 
 def clean_up_tags_bin():
     """
@@ -115,7 +146,7 @@ def word2vec(dict_tags, data_dir, embedding_filename):
             if tag in glove:
                 image_vec_rep.append(glove[tag])
                 list_hash_tag.append(tag)
-        image_vec_rep = np.sum(np.array(image_vec_rep), axis=0)
+        image_vec_rep = np.mean(np.array(image_vec_rep), axis=0) if len(image_vec_rep) > 0 else np.zeros((100,))
         all_vec_rep.append(image_vec_rep)
         list_id.append(tags)
     save_embeddings = '../StackGAN-Pytorch/data/insta/train/vec_emb.pickle'
@@ -139,7 +170,7 @@ def load_embedding(data_dir, embedding_filename):
         embeddings = pickle.load(f)
         embeddings = np.array(embeddings)
         # embedding_shape = [embeddings.shape[-1]]
-        print('embeddings: ', len(embeddings))
+        print('embeddings: ', embeddings[:10])
 
 
 if __name__ == '__main__':
@@ -148,15 +179,15 @@ if __name__ == '__main__':
     # img_folder = '../data_filtered_thres_10.0'
     img_folder = '../StackGAN-Pytorch/data/insta'
     img_names = dict([(name.split(".")[0], None) for name in os.listdir(img_folder)])
-    dict_img_to_tags = read_hashtags('output')
+    dict_img_to_tags = read_hashtags('insta_output')
     dict_img_to_tags_filtered = dict([(key, hashtags) for key, hashtags in dict_img_to_tags.items() if key in img_names])
 
     # bin_vec = binary_representation(dict_img_to_tags, directory, save_file)
 
     model_dir = os.path.dirname(os.path.realpath(__file__))
-    model_filename = '/glove.twitter.27B.25d.txt'
+    model_filename = '/glove.twitter.27B.100d.txt'
     print('Embedding path:\t', model_dir + model_filename)
     word2vec(dict_img_to_tags_filtered, model_dir, model_filename)
-    load_embedding('../StackGAN-Pytorch/data/insta/train/', 'filenames.pickle')
-    load_embedding('../StackGAN-Pytorch/data/insta/train/', 'vec_emb.pickle')
+    # load_embedding('../StackGAN-Pytorch/data/insta/train/', 'filenames.pickle')
+    # load_embedding('../StackGAN-Pytorch/data/insta/train/', 'vec_emb.pickle')
     print('done.')

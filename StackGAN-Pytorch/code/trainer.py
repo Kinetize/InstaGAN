@@ -38,11 +38,12 @@ class GANTrainer(object):
         self.max_epoch = cfg.TRAIN.MAX_EPOCH
         self.snapshot_interval = cfg.TRAIN.SNAPSHOT_INTERVAL
         if cfg.CUDA:
-            s_gpus = cfg.GPU_ID.split(',')
+            s_gpus = ['2']  # cfg.GPU_ID.split(',')
             self.gpus = [int(ix) for ix in s_gpus]
             self.num_gpus = len(self.gpus)
             self.batch_size = cfg.TRAIN.BATCH_SIZE * self.num_gpus
             torch.cuda.set_device(self.gpus[0])
+            print('AAAAAAAAAAAAAAAA ' + cfg.GPU_ID)
             cudnn.benchmark = True
         else:
             s_gpus = cfg.GPU_ID.split(',')
@@ -83,7 +84,10 @@ class GANTrainer(object):
         from model import STAGE1_G, STAGE2_G, STAGE2_D
 
         Stage1_G = STAGE1_G()
-        netG = STAGE2_G(Stage1_G)
+        for param in Stage1_G.parameters():
+            param.requires_grad = False 
+
+        netG = STAGE2_G()
         netG.apply(weights_init)
         print(netG)
         if cfg.NET_G != '':
@@ -96,7 +100,7 @@ class GANTrainer(object):
             state_dict = \
                 torch.load(cfg.STAGE1_G,
                            map_location=lambda storage, loc: storage)
-            netG.STAGE1_G.load_state_dict(state_dict)
+            Stage1_G.load_state_dict(state_dict)
             print('Load from: ', cfg.STAGE1_G)
         else:
             print("Please give the Stage1_G path")
@@ -113,15 +117,16 @@ class GANTrainer(object):
         print(netD)
 
         if cfg.CUDA:
+            Stage1_G.cuda(3)
             netG.cuda()
             netD.cuda()
-        return netG, netD
+        return Stage1_G, netG, netD
 
     def train(self, data_loader, stage=1):
         if stage == 1:
             netG, netD = self.load_network_stageI()
         else:
-            netG, netD = self.load_network_stageII()
+            Stage1_G, netG, netD = self.load_network_stageII()
 
         nz = cfg.Z_DIM
         batch_size = self.batch_size
@@ -174,7 +179,13 @@ class GANTrainer(object):
                 # (2) Generate fake images
                 ######################################################
                 noise.data.normal_(0, 1)
-                inputs = (txt_embedding, noise)
+                if stage != 1:  
+                    _, stage1_img, _, _ = nn.parallel.data_parallel(Stage1_G, (txt_embedding.cuda(3), noise.cuda(3)), [3])
+                    stage1_img = stage1_img.detach().cuda()
+                    inputs = (txt_embedding, stage1_img)
+                else:
+                    inputs = (txt_embedding, noise)
+
                 if cfg.CUDA:
                     _, fake_imgs, mu, logvar = \
                         nn.parallel.data_parallel(netG, inputs, self.gpus)
@@ -219,7 +230,13 @@ class GANTrainer(object):
                     self.summary_writer.add_summary(summary_KL, count)
 
                     # save the image result for each epoch
-                    inputs = (txt_embedding, fixed_noise)
+                    if stage != 1:
+                        _, stage1_img, _, _ = nn.parallel.data_parallel(Stage1_G, (txt_embedding.cuda(3), fixed_noise.cuda(3)), [3])
+                        stage1_img = stage1_img.detach().cuda()  
+                        inputs = (txt_embedding, stage1_img)
+                    else:
+                        inputs = (txt_embeddings, fixed_noise)
+                    
                     if cfg.CUDA:
                         lr_fake, fake, _, _ = \
                             nn.parallel.data_parallel(netG, inputs, self.gpus)
