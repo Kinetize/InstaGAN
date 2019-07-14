@@ -13,12 +13,12 @@ import time
 import numpy as np
 import torchfile
 
-from miscc.config import cfg
-from miscc.utils import mkdir_p
-from miscc.utils import weights_init
-from miscc.utils import save_img_results, save_model
-from miscc.utils import KL_loss
-from miscc.utils import compute_discriminator_loss, compute_generator_loss
+from .miscc.config import cfg
+from .miscc.utils import mkdir_p
+from .miscc.utils import weights_init
+from .miscc.utils import save_img_results, save_model
+from .miscc.utils import KL_loss
+from .miscc.utils import compute_discriminator_loss, compute_generator_loss
 
 from tensorboardX import summary
 from tensorboardX import FileWriter
@@ -26,6 +26,9 @@ from tensorboardX import FileWriter
 
 class GANTrainer(object):
     def __init__(self, output_dir):
+        self.sample_transfer_Stage2Gen = None
+        self.sample_transfer_Stage1Gen = None
+
         if cfg.TRAIN.FLAG:
             self.model_dir = os.path.join(output_dir, 'Model')
             self.image_dir = os.path.join(output_dir, 'Image')
@@ -81,7 +84,7 @@ class GANTrainer(object):
 
     # ############# For training stageII GAN  #############
     def load_network_stageII(self):
-        from model import STAGE1_G, STAGE2_G, STAGE2_D
+        from .model import STAGE1_G, STAGE2_G, STAGE2_D
 
         Stage1_G = STAGE1_G()
         for param in Stage1_G.parameters():
@@ -96,7 +99,7 @@ class GANTrainer(object):
                            map_location=lambda storage, loc: storage)
             netG.load_state_dict(state_dict)
             print('Load from: ', cfg.NET_G)
-        elif cfg.STAGE1_G != '':
+        if cfg.STAGE1_G != '':
             state_dict = \
                 torch.load(cfg.STAGE1_G,
                            map_location=lambda storage, loc: storage)
@@ -316,4 +319,37 @@ class GANTrainer(object):
                 im = Image.fromarray(im)
                 im.save(save_name)
             count += batch_size
+
+    def sample_s1_image(self, condition, noise):
+        from .model import STAGE1_G
+
+        if self.sample_transfer_Stage1Gen is None:
+            self.sample_transfer_Stage1Gen = STAGE1_G()
+            state_dict = torch.load(cfg.STAGE1_G, map_location=lambda storage, loc: storage)
+            self.sample_transfer_Stage1Gen.load_state_dict(state_dict)
+
+        expanded_condition = condition#np.expand_dims(condition, axis=0)
+        noise_condition = noise#np.expand_dims(noise, axis=0)
+
+        _, img, _, _ = self.sample_transfer_Stage1Gen(torch.Tensor(expanded_condition), torch.Tensor(noise_condition))
+
+        return img.permute(0, 2, 3, 1).detach().numpy()[0]
+
+
+
+    def sample_transfer(self, image, condition=np.random.randn(cfg.TEXT.DIMENSION)):
+        from .model import STAGE2_G
+        print("Condition norm: " + str(np.linalg.norm(condition)))
+
+        if self.sample_transfer_Stage2Gen is None:
+            self.sample_transfer_Stage2Gen = STAGE2_G()
+            state_dict = torch.load(cfg.NET_G, map_location=lambda storage, loc: storage)
+            self.sample_transfer_Stage2Gen.load_state_dict(state_dict)
+        expanded_condition = np.expand_dims(condition, axis=0)
+        expanded_img = np.expand_dims(image, axis=0)
+        print(expanded_img.shape)
+        with torch.no_grad():
+            _, imgs, mu, logvar = self.sample_transfer_Stage2Gen(torch.Tensor(expanded_condition), torch.Tensor(expanded_img).permute(0, 3, 1, 2))
+        return imgs.permute(0, 2, 3, 1)[0].detach().numpy()
+
 
