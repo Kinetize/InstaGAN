@@ -54,6 +54,17 @@ default_fps = 3
 fps_selection.setCurrentIndex(default_fps)
 
 
+batch_sizes = [2, 5, 10, 16, 32, 64, 128]
+batch_size_input_layout = QHBoxLayout()
+batch_size_input_label = QLabel("Batch-Size")
+batch_size_input = QComboBox()
+[batch_size_input.addItem(str(bs)) for bs in batch_sizes]
+batch_size_input.setCurrentIndex(2)
+batch_size_input_layout.addWidget(batch_size_input_label)
+batch_size_input_layout.addWidget(batch_size_input)
+
+
+
 generator_flag_input = QCheckBox("Generator")
 generator_flag_input.setCheckState(False)
 
@@ -68,7 +79,7 @@ def get_embeddings():
         vectors = []
         embedding_file_path = os.path.join("insta_gan_gui", "glove.twitter.27B.100d.txt")
         window.setWindowTitle("Loading embeddings...")
-        for i in range(200):
+        for i in range(5):
             app.processEvents()
         with open(embedding_file_path, 'rb') as f:
             for l in f:
@@ -127,52 +138,94 @@ timer.timeout.connect(timer_tick)
 
 timer.start(1000/fps_rates[default_fps])
 
-def button_click():
-    if current_image is not None:
-        hashtag_string_raw = hashtags_input.toPlainText()
-        hashtags = list(filter(lambda h: len(h) > 0, reduce(lambda a,c: a + c.split("\n"), hashtag_string_raw.split(","), [])))
 
+image_backlog = []
 
-        embeddings_factor = embeddings_factors[embeddings_factor_input.currentIndex()]
-        print("Embeddings factor: %s" % str(embeddings_factor))
-        condition = np.zeros(100)#np.random.randn(100) * embeddings_factor
-        for i in range(10):
-            condition[np.random.randint(0, 100)] = 1
+def clear_backlog():
+    global image_backlog
+    image_backlog = []
 
-
-        if len(hashtags) > 0:
-            embeddings_dict = get_embeddings()
-            embeddings = np.array([embeddings_dict[h] for h in hashtags if h in embeddings_dict])
-            condition = embeddings.mean(axis=0) * embeddings_factor
-            print(condition)
-
-
-
-
-        if generator_flag_input.isChecked():
-            img_intermediate = trainer.sample_s1_image(condition.reshape(1, -1).repeat(2, axis=0), np.random.randn(2, config.cfg.Z_DIM))
-            img_gen_output = ((img_intermediate + 1) * 127.5).astype(np.uint8)
-            h, w, ch = img_gen_output.shape
-            bytesPerLine = ch * w
-            image = QImage(img_gen_output.copy().data, w, h, bytesPerLine, QImage.Format_RGB888)
-            image_scaled = image.scaled(output_img_size, output_img_size)
-            pixmap = QPixmap.fromImage(image_scaled)
-            cam_label.setPixmap(pixmap)
+def show_next_in_backlog():
+    if len(image_backlog) > 0:
+        data = image_backlog.pop(0)
+        if len(data) == 2:
+            img_intermediate, img_final = data
+            gan_label.setPixmap(np_to_q(img_final))
+            cam_label.setPixmap(np_to_q(img_intermediate))
 
         else:
-            print(current_image.shape)
-            img_intermediate = current_image/255.0 * 2.0 - 1
-        img = trainer.sample_transfer(img_intermediate, condition=condition).copy()
-
-        img_output = ((img + 1) * 127.5).astype(np.uint8)
+            img_final = data[0]
+            gan_label.setPixmap(np_to_q(img_final))
+    next_button_show()
 
 
-        h, w, ch = img_output.shape
-        bytesPerLine = ch * w
-        image = QImage(img_output.data, w, h, bytesPerLine, QImage.Format_RGB888)
-        image_scaled = image.scaled(output_img_size, output_img_size)
-        pixmap = QPixmap.fromImage(image_scaled)
-        gan_label.setPixmap(pixmap)
+def np_to_q(im, output_img_size=256*2):
+    img_output = ((im + 1) * 127.5).astype(np.uint8)
+    h, w, ch = img_output.shape
+    bytesPerLine = ch * w
+    image = QImage(img_output.copy().data, w, h, bytesPerLine, QImage.Format_RGB888)
+    image_scaled = image.scaled(output_img_size, output_img_size)
+    pixmap = QPixmap.fromImage(image_scaled)
+    return pixmap
+
+def next_button_show():
+    next_button.setText("Next (%s)" % str(len(image_backlog)))
+    if len(image_backlog) > 0:
+        next_button.show()
+    else:
+        next_button.hide()
+
+def button_click():
+    global image_backlog
+    clear_backlog()
+
+    #Read parameters
+    hashtag_string_raw = hashtags_input.toPlainText()
+    hashtags = list(filter(lambda h: len(h) > 0, reduce(lambda a,c: a + c.split("\n"), hashtag_string_raw.split(","), [])))
+    embeddings_factor = embeddings_factors[embeddings_factor_input.currentIndex()]
+    print("Embeddings factor: %s" % str(embeddings_factor))
+
+    #Generate condition
+    condition = np.zeros(100)#np.random.randn(100) * embeddings_factor
+    for i in range(10):
+        condition[np.random.randint(0, 100)] = 1
+
+    if len(hashtags) > 0:
+        print("Hashtags: " + str(hashtags))
+        embeddings_dict = get_embeddings()
+        embeddings = np.array([embeddings_dict[h] for h in hashtags if h in embeddings_dict])
+        condition = embeddings.mean(axis=0) * embeddings_factor
+        print(condition)
+
+
+
+    #generating batch
+    batch_size = batch_sizes[batch_size_input.currentIndex()]
+    condition_batch = condition.reshape(1, -1).repeat(batch_size, axis=0)
+    noise_batch = np.random.randn(batch_size, config.cfg.Z_DIM)
+
+    if generator_flag_input.isChecked():
+        imgs_intermediate = trainer.sample_s1_image(condition_batch, noise_batch)
+    else:
+        if current_image is not None:
+            imgs_intermediate = current_image/255.0 * 2.0 - 1
+            imgs_intermediate = np.expand_dims(imgs_intermediate, axis=0)
+            condition_batch = condition_batch[:1, :]
+        else:
+            imgs_intermediate = None
+
+    if imgs_intermediate is not None:
+        imgs_final = trainer.sample_transfer(imgs_intermediate, condition_batch).copy()
+
+    if generator_flag_input.isChecked():
+        image_backlog += list(zip(imgs_intermediate, imgs_final))
+    else:
+        image_backlog += list((img,) for img in imgs_final)
+    show_next_in_backlog()
+
+
+
+
 
 def freeze_callback():
     global freeze
@@ -180,9 +233,18 @@ def freeze_callback():
 
 
 button = QPushButton("Transform")
+button.clicked.connect(button_click)
+
+next_button = QPushButton("Next")
+next_button.clicked.connect(show_next_in_backlog)
+next_button.hide()
+
 freeze_button = QPushButton("Freeze")
 freeze_button.clicked.connect(freeze_callback)
-button.clicked.connect(button_click)
+
+button_layout = QHBoxLayout()
+button_layout.addWidget(button)
+button_layout.addWidget(next_button)
 fps_sel_layout.addWidget(fps_label)
 fps_sel_layout.addWidget(fps_selection)
 settings_layout.addWidget(hashtags_label)
@@ -190,8 +252,9 @@ settings_layout.addWidget(hashtags_input)
 settings_layout.addLayout(fps_sel_layout)
 settings_layout.addLayout(embeddings_factor_input_layout)
 settings_layout.addWidget(generator_flag_input)
+settings_layout.addLayout(batch_size_input_layout)
 settings_layout.addWidget(freeze_button)
-settings_layout.addWidget(button)
+settings_layout.addLayout(button_layout)
 settings_layout.setAlignment(Qt.AlignBottom)
 
 layout.addWidget(cam_label)

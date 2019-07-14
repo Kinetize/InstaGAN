@@ -328,16 +328,14 @@ class GANTrainer(object):
             state_dict = torch.load(cfg.STAGE1_G, map_location=lambda storage, loc: storage)
             self.sample_transfer_Stage1Gen.load_state_dict(state_dict)
 
-        expanded_condition = condition#np.expand_dims(condition, axis=0)
-        noise_condition = noise#np.expand_dims(noise, axis=0)
 
-        _, img, _, _ = self.sample_transfer_Stage1Gen(torch.Tensor(expanded_condition), torch.Tensor(noise_condition))
+        _, img, _, _ = self.sample_transfer_Stage1Gen(torch.Tensor(condition), torch.Tensor(noise))
 
-        return img.permute(0, 2, 3, 1).detach().numpy()[0]
+        return img.permute(0, 2, 3, 1).detach().numpy()
 
 
 
-    def sample_transfer(self, image, condition=np.random.randn(cfg.TEXT.DIMENSION)):
+    def sample_transfer(self, images, condition):
         from .model import STAGE2_G
         print("Condition norm: " + str(np.linalg.norm(condition)))
 
@@ -345,11 +343,8 @@ class GANTrainer(object):
             self.sample_transfer_Stage2Gen = STAGE2_G()
             state_dict = torch.load(cfg.NET_G, map_location=lambda storage, loc: storage)
             self.sample_transfer_Stage2Gen.load_state_dict(state_dict)
-        expanded_condition = np.expand_dims(condition, axis=0)
-        expanded_img = np.expand_dims(image, axis=0)
-        print(expanded_img.shape)
         with torch.no_grad():
-            _, imgs, mu, logvar = self.sample_transfer_Stage2Gen(torch.Tensor(expanded_condition), torch.Tensor(expanded_img).permute(0, 3, 1, 2))
-        return imgs.permute(0, 2, 3, 1)[0].detach().numpy()
+            _, imgs, mu, logvar = self.sample_transfer_Stage2Gen(torch.Tensor(condition), torch.Tensor(images).permute(0, 3, 1, 2))
+        return imgs.permute(0, 2, 3, 1).detach().numpy()
 
 
