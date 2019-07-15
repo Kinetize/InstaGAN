@@ -5,6 +5,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from functools import reduce
+import torch
 
 from StackGAN_Pytorch.code.trainer import GANTrainer
 from StackGAN_Pytorch.code.miscc import config
@@ -175,7 +176,13 @@ def next_button_show():
     else:
         next_button.hide()
 
+freezed_noise = None
+freezed_condition = None
+
 def button_click():
+    global freeze
+    global freezed_noise
+    global freezed_condition
     global image_backlog
     clear_backlog()
 
@@ -186,9 +193,9 @@ def button_click():
     print("Embeddings factor: %s" % str(embeddings_factor))
 
     #Generate condition
-    condition = np.zeros(100)#np.random.randn(100) * embeddings_factor
-    for i in range(10):
-        condition[np.random.randint(0, 100)] = 1
+    condition = np.random.randn(config.cfg.Z_DIM) * embeddings_factor if freezed_condition is None else freezed_condition
+    #for i in range(10):
+    #    condition[np.random.randint(0, 100)] = 1
 
     if len(hashtags) > 0:
         print("Hashtags: " + str(hashtags))
@@ -202,9 +209,17 @@ def button_click():
     #generating batch
     batch_size = batch_sizes[batch_size_input.currentIndex()]
     condition_batch = condition.reshape(1, -1).repeat(batch_size, axis=0)
-    noise_batch = np.random.randn(batch_size, config.cfg.Z_DIM)
+
 
     if generator_flag_input.isChecked():
+        if freezed_noise is None or (not freezed_noise.shape == (batch_size, config.cfg.Z_DIM)):
+            noise_batch = np.random.randn(batch_size, config.cfg.Z_DIM)
+            if freeze:
+                freezed_noise = noise_batch
+        else:
+            noise_batch = freezed_noise
+        print("Noise batch: %s" % str(noise_batch))
+        torch.manual_seed(12783217)
         imgs_intermediate = trainer.sample_s1_image(condition_batch, noise_batch)
     else:
         if current_image is not None:
@@ -215,6 +230,7 @@ def button_click():
             imgs_intermediate = None
 
     if imgs_intermediate is not None:
+        torch.manual_seed(12783217)
         imgs_final = trainer.sample_transfer(imgs_intermediate, condition_batch).copy()
 
     if generator_flag_input.isChecked():
@@ -229,7 +245,19 @@ def button_click():
 
 def freeze_callback():
     global freeze
+    global freezed_noise
+    global freezed_condition
     freeze = not freeze
+    if freeze:
+        batch_size = batch_sizes[batch_size_input.currentIndex()]
+        freezed_noise = np.random.randn(batch_size, config.cfg.Z_DIM)
+        embeddings_factor = embeddings_factors[embeddings_factor_input.currentIndex()]
+        freezed_condition = np.random.randn(config.cfg.Z_DIM) * embeddings_factor
+        freeze_button.setText("Unfreeze")
+    else:
+        freeze_button.setText("Freeze")
+        freezed_noise = None
+        freezed_condition = None
 
 
 button = QPushButton("Transform")
