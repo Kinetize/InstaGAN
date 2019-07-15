@@ -320,34 +320,43 @@ class GANTrainer(object):
                 im.save(save_name)
             count += batch_size
 
-    def sample_s1_image(self, condition, noise):
+    def sample_s1_image(self, condition, noise, reload_state=False):
         from .model import STAGE1_G
 
         if self.sample_transfer_Stage1Gen is None:
-            self.sample_transfer_Stage1Gen = torch.load(cfg.STAGE1_G, map_location=lambda storage, loc: storage)
+            self.sample_transfer_Stage1Gen = STAGE1_G()
+            self.sample_transfer_Stage1Gen.eval()
+            self.sample_transfer_Stage1Gen_state_dict = torch.load(cfg.STAGE1_G, map_location=lambda storage, loc: storage)
+            self.sample_transfer_Stage1Gen.load_state_dict(self.sample_transfer_Stage1Gen_state_dict)
+        else:
+            if reload_state:
+                self.sample_transfer_Stage1Gen = STAGE1_G()
+                self.sample_transfer_Stage1Gen.eval()
+                self.sample_transfer_Stage1Gen.load_state_dict(self.sample_transfer_Stage1Gen_state_dict)
 
-        s1 = STAGE1_G()
-        s1.load_state_dict(self.sample_transfer_Stage1Gen)
-        s1.eval()
 
-
-        _, img, _, _ = s1(torch.Tensor(condition), torch.Tensor(noise))
+        _, img, _, _ = self.sample_transfer_Stage1Gen(torch.Tensor(condition), torch.Tensor(noise))
 
         return img.permute(0, 2, 3, 1).detach().numpy()
 
 
 
-    def sample_transfer(self, images, condition):
+    def sample_transfer(self, images, condition, reload_state=False):
         from .model import STAGE2_G
         print("Condition norm: " + str(np.linalg.norm(condition)))
 
         if self.sample_transfer_Stage2Gen is None:
-            self.sample_transfer_Stage2Gen = torch.load(cfg.NET_G, map_location=lambda storage, loc: storage)
-        s2 = STAGE2_G()
-        s2.load_state_dict(self.sample_transfer_Stage2Gen)
-        s2.eval()
+            self.sample_transfer_Stage2Gen = STAGE2_G()
+            self.sample_transfer_Stage2Gen.eval()
+            self.sample_transfer_Stage2Gen_state_dict = torch.load(cfg.NET_G, map_location=lambda storage, loc: storage)
+            self.sample_transfer_Stage2Gen.load_state_dict(self.sample_transfer_Stage2Gen_state_dict)
+        else:
+            if reload_state:
+                self.sample_transfer_Stage2Gen = STAGE2_G()
+                self.sample_transfer_Stage2Gen.eval()
+                self.sample_transfer_Stage2Gen.load_state_dict(self.sample_transfer_Stage2Gen_state_dict)
         with torch.no_grad():
-            _, imgs, mu, logvar = s2(torch.Tensor(condition), torch.Tensor(images).permute(0, 3, 1, 2))
+            _, imgs, mu, logvar = self.sample_transfer_Stage2Gen(torch.Tensor(condition), torch.Tensor(images).permute(0, 3, 1, 2))
         return imgs.permute(0, 2, 3, 1).detach().numpy()
 
 

@@ -55,7 +55,7 @@ default_fps = 3
 fps_selection.setCurrentIndex(default_fps)
 
 
-batch_sizes = [2, 5, 10, 16, 32, 64, 128]
+batch_sizes = [1, 2, 5, 10, 16, 32, 64, 128]
 batch_size_input_layout = QHBoxLayout()
 batch_size_input_label = QLabel("Batch-Size")
 batch_size_input = QComboBox()
@@ -179,12 +179,15 @@ def next_button_show():
 freezed_noise = None
 freezed_condition = None
 
-def button_click():
+first_batch = True
+
+def button_click(dry_run=False):
+    global first_batch
     global freeze
     global freezed_noise
     global freezed_condition
     global image_backlog
-    clear_backlog()
+    clear_backlog() if not dry_run else None
 
     #Read parameters
     hashtag_string_raw = hashtags_input.toPlainText()
@@ -233,12 +236,13 @@ def button_click():
         torch.manual_seed(12783217)
         imgs_final = trainer.sample_transfer(imgs_intermediate, condition_batch).copy()
 
-    if generator_flag_input.isChecked():
-        image_backlog += list(zip(imgs_intermediate, imgs_final))
-    else:
-        image_backlog += list((img,) for img in imgs_final)
-    show_next_in_backlog()
-
+    if not dry_run:
+        if generator_flag_input.isChecked():
+            image_backlog += list(zip(imgs_intermediate, imgs_final))
+        else:
+            image_backlog += list((img,) for img in imgs_final)
+        show_next_in_backlog()
+        first_batch = False
 
 
 
@@ -256,6 +260,7 @@ def freeze_callback():
         freeze_button.setText("Unfreeze")
     else:
         freeze_button.setText("Freeze")
+        generator_flag_input.setCheckState(False)
         freezed_noise = None
         freezed_condition = None
 
